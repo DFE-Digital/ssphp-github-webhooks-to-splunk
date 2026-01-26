@@ -4,11 +4,13 @@ use reqwest::Client;
 pub struct Service {
     pub(crate) url: String,
     pub(crate) token: String,
+    pub(crate) client: Client,
 }
 
 impl Service {
     pub fn new(url: String, token: String) -> Service {
-        Service { url, token }
+        let client = Client::builder().build().unwrap();
+        Service { url, token, client }
     }
 
     // pub async fn send_events(&self, events: Vec<String>) {
@@ -37,11 +39,12 @@ impl Service {
         let token = format!("Splunk {} ", self.token.clone());
         let url = self.url.clone();
 
-        println!("Event : {}", event);
+        //println!("Event : {}", event);
 
-        let client = Client::builder().build().unwrap();
+        //let client = Client::builder().build().unwrap();
 
-        let response = client
+        let _response = self
+            .client
             .post(&url)
             .header("AUTHORIZATION", &token)
             .header("CONTENT_TYPE", "application/json")
@@ -50,10 +53,10 @@ impl Service {
             .await
             .unwrap();
 
-        println!(
-            "Response : {}, Text : {}",
-            response.status(),
-            response.text().await.unwrap()
-        )
+        // println!(
+        //     "Response : {}, Text : {}",
+        //     response.status(),
+        //     response.text().await.unwrap()
+        // )
     }
 }

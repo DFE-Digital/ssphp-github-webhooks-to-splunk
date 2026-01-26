@@ -9,3 +9,11 @@ serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1.0", features = ["derive"] }
 reqwest = { version = "0.12.23", features = ["blocking", "json", "multipart"] }
+sha2 = "*"
+hmac = { version = "*"}
+hex-literal = "*"
+digest = { version = "*", features = ["mac"]}
+faster-hex = "*"
+
+[profile.release]
+debug = true
