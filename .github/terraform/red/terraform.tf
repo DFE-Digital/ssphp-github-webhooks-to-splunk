@@ -1,0 +1,57 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~>4.0"
+    }
+  }
+
+  required_version = "~> 1.14.3"
+
+  # backend "azurerm" {
+  #   resource_group_name  = "s194d00-SSPHP-GitHub-Webhooks"
+  #   storage_account_name = "tfstatep3sha"
+  #   container_name       = "tfstate"
+  #   key                  = "terraform.tfstate"
+  # }
+}
+
+locals {
+  resource_group = "s194d00-SSPHP-GitHub-Webhooks"
+  tags = {
+    "Product"          = "Protective Monitoring - Splunk SaaS"
+    "Environment"      = "Dev"
+    "Service Offering" = "Protective Monitoring - Splunk SaaS"
+
+  }
+  #  sku_name_python      = "Y1"
+  sku_name_rust  = "EP1"
+  key_vault_name = "SSPHP-GitHub-Webhooks"
+  key_vault_object_ids = [
+    "393279ef-dc89-4bff-8186-4d283ee7b280",
+    "7e53a6ad-8c94-4d82-a3b5-222882dffc29",
+    "0870054a-44a7-4ddf-af8d-e48276f81df4",
+    "14b985a0-2abe-4844-b1ac-82ca64943724",
+    "b7ecf1ae-c14f-4be8-a8d1-db7b5157d5d9",
+    "413963da-47c3-4a68-8e6c-0ac529eadd3c",
+  ] # 7e53 = GitHub Actions - TODO; check if still required
+}
+
+provider "azurerm" {
+  features {}
+}
+
+module "github_webhooks" {
+  source         = "../github_webhooks"
+  resource_group = local.resource_group
+  #  sku_name_python      = local.sku_name_python
+  sku_name_rust        = local.sku_name_rust
+  key_vault_name       = local.key_vault_name
+  key_vault_object_ids = local.key_vault_object_ids
+  tags                 = local.tags
+  # vnet = {
+  #   name                = "s194d01-core-vn-01",
+  #   subnet_name         = "s194d01-core-sn-01",
+  #   resource_group_name = "s194d01-core"
+  # }
+}

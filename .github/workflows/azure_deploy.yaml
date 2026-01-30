@@ -1,0 +1,352 @@
+---
+name: Data Ingester Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'data_ingester/**'
+      - '!data_ingester/terraform/infrastructure_for_test/**'
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "nightly-2025-10-14"
+
+permissions:
+  # actions: read|write|none
+  # attestations: read|write|none
+  # checks: read|write|none
+  # contents: read
+  # deployments: read|write|none
+  id-token: write
+  # iessues: read|write|none
+  # nmodels: read|none
+  # discussions: read|write|none
+  # packages: read|write|none
+  pages: write
+  # pull-requests: read|write|none
+  # security-events: read|write|none
+  # statuses: read|write|none
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-10-14
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: cargo_audit-${{ steps.toolchain.outputs.name}} }}
+
+      - name: cargo audit
+        run: cargo install cargo-audit; cd data_ingester/data_ingester_workspace; cargo audit
+
+  formatting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-10-14
+          targets: x86_64-unknown-linux-musl
+          components: rust-fmt
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: cargo-fmt-${{ steps.toolchain.outputs.name}}-${{ hashFiles('data_ingester/data_ingester_workspace/Cargo.lock') }}
+
+      - name: cargo fmt
+        run: cd data_ingester/data_ingester_workspace; cargo fmt --check
+
+  terraform_validate_red:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - name: Terraform version
+        run: terraform -version
+
+        # Terraform
+      - name: Run terraform
+        run: cd data_ingester/terraform/red; terraform init -backend=false; terraform validate
+
+  terraform_fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - name: Terraform version
+        run: terraform -version
+
+        # Terraform
+      - name: Run terraform
+        run: cd data_ingester/terraform; terraform fmt -check -recursive .
+
+  clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-10-14
+          targets: x86_64-unknown-linux-musl
+          components: clippy
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: cargo-clippy-${{ steps.toolchain.outputs.name}}-${{ hashFiles('data_ingester/data_ingester_workspace/Cargo.lock') }}
+
+      - name: cargo clippy
+        run: cd data_ingester/data_ingester_workspace; cargo clippy
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-10-14
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: cargo_test-${{ steps.toolchain.outputs.name}}-${{ hashFiles('data_ingester/data_ingester_workspace/Cargo.lock') }}
+
+      - name: cargo test
+        run: cd data_ingester/data_ingester_workspace; cargo test
+
+  coverage:
+    name: Generate Code coverage metrics
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-10-14
+          targets: x86_64-unknown-linux-musl
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: cargo_llvm_cov-${{ steps.toolchain.outputs.name}}-${{ hashFiles('data_ingester/data_ingester_workspace/Cargo.lock') }}
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Generate code coverage
+        run: cd data_ingester/data_ingester_workspace; cargo llvm-cov --workspace --html --output-dir coverage
+
+  #     - name: Upload artifact
+  #       uses: actions/upload-pages-artifact@v3
+  #       with:
+  #         path: ${{ github.workspace }}/data_ingester/data_ingester_workspace/coverage
+
+  # publish_code_cov:
+  #   needs: [coverage]
+  #   name: publish coverage
+  #   environment:
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Publish Rust Docs to GitHub Pages
+  #       id: deployment
+  #       uses: actions/deploy-pages@v4
+
+  generate_docs:
+    name: generate rust docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-03-23
+          targets: x86_64-unknown-linux-musl
+          components: rust-src, clippy
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: rust_docs_cache-rust-target-${{steps.toolchain.outputs.name}}-${{ hashFiles('${{ github.workspace }}/data_ingester/data_ingester_workspace/Cargo.lock') }}
+
+      - name: Setup pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Clean docs folder
+        run: cd ${{ github.workspace }}/data_ingester/data_ingester_workspace/; cargo clean --doc
+      - name: Build docs
+        run: cd ${{ github.workspace }}/data_ingester/data_ingester_workspace/; cargo doc --no-deps --document-private-items
+      - name: Add redirect
+        run: echo '<meta http-equiv="refresh" content="0;url=data_ingester_axum_entrypoint/index.html">' > ${{ github.workspace }}/data_ingester/data_ingester_workspace/target/doc/index.html
+
+      - name: Remove lock file
+        run: rm ${{ github.workspace }}/data_ingester/data_ingester_workspace/target/doc/.lock
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ github.workspace }}/data_ingester/data_ingester_workspace/target/doc
+
+  publish_rust_docs:
+    needs: [generate_docs]
+    name: publish rust docs
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Publish Coverage to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: musl-tools
+          version: 1.0
+
+      - name: toolchain
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-10-14
+          targets: x86_64-unknown-linux-musl
+          components: rust-src
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ${{ github.workspace }}/data_ingester/data_ingester_workspace/target
+          key: cargo_build_cache-rust-target-${{ steps.toolchain.outputs.name}}-${{ hashFiles('data_ingester/data_ingester_workspace/Cargo.lock') }}
+
+      - name: cargo build
+        run: cd data_ingester/data_ingester_workspace; cargo build --release --target=x86_64-unknown-linux-musl
+
+      - name: SHA256 for release binary
+        run: sha256sum data_ingester/data_ingester_workspace/target/x86_64-unknown-linux-musl/release/data_ingester_axum_entrypoint
+
+      - name: Upload bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: data_ingester_axum_entrypoint_${{ github.sha }}
+          path: data_ingester/data_ingester_workspace/target/x86_64-unknown-linux-musl/release/data_ingester_axum_entrypoint
+          if-no-files-found: error
+          compression-level: 9
+
+  terraform_deploy:
+    needs: [audit, test, build]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: data_ingester_axum_entrypoint_${{ github.sha }}
+          path: data_ingester/data_ingester_workspace/data_ingester_axum_entrypoint/function_zip/
+
+      - name: Set binary to +x
+        run: chmod +x data_ingester/data_ingester_workspace/data_ingester_axum_entrypoint/function_zip/data_ingester_axum_entrypoint
+
+      - name: SHA256 for release binary
+        run: sha256sum data_ingester/data_ingester_workspace/data_ingester_axum_entrypoint/function_zip/data_ingester_axum_entrypoint
+
+      - name: Deploy terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - name: Terraform version
+        run: terraform -version
+
+        # Terraform
+      - name: Run terraform
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        run: cd data_ingester/terraform/red; terraform init -upgrade; terraform apply -auto-approve
