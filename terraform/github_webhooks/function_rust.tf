@@ -9,7 +9,7 @@ resource "azurerm_service_plan" "SSPHP_github_webhooks" {
 
 data "archive_file" "github_webhooks" {
   type        = "zip"
-  source_dir  = "${path.module}/../../github_webhooks_workspace/github_webhooks_axum_entrypoint/function_zip/"
+  source_dir  = "${path.module}/function_zip/"
   output_path = "${path.module}/github_webhooks_${formatdate("YYYYMMDDHHmmss", timestamp())}.zip"
 }
 
