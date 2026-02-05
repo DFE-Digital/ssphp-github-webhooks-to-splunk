@@ -72,8 +72,7 @@ async fn main() {
     let serialized_event = serde_json::to_string(&hec_event).unwrap();
     config.splunk_svc.send_event(serialized_event).await;
     // config.splunk_svc.send_event(serialized_event).await;
-// testing testing 123
-
+    // testing testing 123
 
 
     // build our application with a single route
