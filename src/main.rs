@@ -25,6 +25,12 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 type HmacSha256 = Hmac<Sha256>;
 use faster_hex::hex_decode;
+use azure_identity::DefaultAzureCredential;
+use azure_identity::TokenCredentialOptions;
+use azure_security_keyvault::prelude::KeyVaultGetSecretResponse;
+use azure_security_keyvault::{KeyvaultClient, SecretClient};
+use tracing::{error, info, warn};
+
 struct Config {
     splunk_svc: Service,
     github_hmac_secret: Bytes,
@@ -33,17 +39,42 @@ struct Config {
 #[tokio::main]
 async fn main() {
     // Service Metadata
-    let port = 8088;
-    let url = format!("http://localhost:{}/services/collector/event", port);
+    let port = 443;
+    //let url = format!("http://localhost:{}/services/collector/event", port);
+    let url = format!("https://http-inputs-dfe.splunkcloud.com:{}/services/collector/event", port);
     // let token = std::env::var("SPLUNK_HEC_TOKEN").unwrap();
     // let github_hmac_secret = std::env::var("GITHUB_WEBHOOK_SECRET").unwrap();
-    let token = "foo".to_string();
-    let github_hmac_secret = "bar".to_string();
+    // let token = "foo".to_string();
+    // let github_hmac_secret = "bar".to_string();
+
+    let (token, github_hmac_secret) = get_secrets().await.expect("Failed to get Secrets");
 
     let config = Arc::new(Config {
         splunk_svc: Service::new(url, token),
         github_hmac_secret: Bytes::from_owner(github_hmac_secret),
     });
+
+
+// testing testing 123
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize;
+
+    let event_metadata = hec_event::EventMetaData::new(
+        now,
+        "ssphp_test".to_string(),
+        "ssphp_github".to_string(),
+        "ssphp_github".to_string(),
+        "ssphp_github".to_string(),
+    );
+    let hec_event = HecEvent::new("Starting Sending GitHub Logs to Splunk", event_metadata);
+    let serialized_event = serde_json::to_string(&hec_event).unwrap();
+    config.splunk_svc.send_event(serialized_event).await;
+    // config.splunk_svc.send_event(serialized_event).await;
+// testing testing 123
+
+
 
     // build our application with a single route
     let app = Router::new()
@@ -146,7 +177,7 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
 
     let event_metadata = hec_event::EventMetaData::new(
         now,
-        "main".to_string(),
+        "ssphp_test".to_string(),
         "ssphp_github".to_string(),
         "ssphp_github".to_string(),
         "ssphp_github".to_string(),
@@ -185,6 +216,31 @@ fn validate_webhook_payload(
     mac.verify_slice(&hash_bytes[..])?;
     Ok(())
 }
+
+/// Spawn a future getting a secret to be await'd later
+/// Speeds up secrets collection
+async fn get_secrets() -> Result<(String, String), Box<dyn std::error::Error>> {
+
+    info!("Getting Default Azure Credentials");
+    let credential = Arc::new(
+        DefaultAzureCredential::create(TokenCredentialOptions::default())?
+    );
+
+    info!("KeyVault Secret Client created");
+    let keyvault_name = std::env::var("KEY_VAULT_NAME").unwrap();
+    let keyvault_url = format!("https://{keyvault_name}.vault.azure.net");
+    let client = KeyvaultClient::new(&keyvault_url, credential.clone())?
+        .secret_client();
+
+    info!("KeyVault: getting '{}'", &"SPLUNK-HEC-TOKEN");
+    let secret1 = client.get("SPLUNK-HEC-TOKEN").await?.value.to_string();
+
+    info!("KeyVault: getting '{}'", &"GITHUB-HMAC-SECRET");
+    let secret2 = client.get("GITHUB-HMAC-SECRET").await?.value.to_string();
+    Ok((secret1,secret2))
+}
+
+
 
 #[derive(Debug, Clone)]
 enum ValidationError {

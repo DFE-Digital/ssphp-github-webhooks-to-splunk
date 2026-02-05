@@ -43,7 +43,7 @@ impl Service {
 
         //let client = Client::builder().build().unwrap();
 
-        let _response = self
+        let response = self
             .client
             .post(&url)
             .header("AUTHORIZATION", &token)
@@ -53,10 +53,10 @@ impl Service {
             .await
             .unwrap();
 
-        // println!(
-        //     "Response : {}, Text : {}",
-        //     response.status(),
-        //     response.text().await.unwrap()
-        // )
+        println!(
+            "Response : {}, Text : {}",
+            response.status(),
+            response.text().await.unwrap()
+        )
     }
 }
