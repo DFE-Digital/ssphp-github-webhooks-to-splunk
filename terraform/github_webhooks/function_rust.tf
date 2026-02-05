@@ -30,7 +30,7 @@ resource "azurerm_linux_function_app" "SSPHP_github_webhooks" {
   }
 
   site_config {
-    minimum_tls_version        = "1.2"
+    minimum_tls_version = "1.2"
     cors {
       allowed_origins     = ["https://portal.azure.com", ]
       support_credentials = true
