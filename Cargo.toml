@@ -18,6 +18,7 @@ azure_core = { version = "0.21", default-features = false, features = ["enable_r
 azure_identity = { version = "0.21", default-features = false, features = ["enable_reqwest_rustls"]}
 azure_security_keyvault = { version = "0.21", default-features = false,  features = ["enable_reqwest_rustls"]}
 tracing = "0"
+gethostname = "1.1.0"
 
 [profile.release]
 debug = true
