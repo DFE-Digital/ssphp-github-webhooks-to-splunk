@@ -1,21 +1,9 @@
-To build binary on OSX for deployment
+# Send GitHub Webhooks events to Splunk SIEM
 
-Add this to ~/.cargo/config.toml
+Sending Webhooks events directly to the Splunk HEC endpoint results in missing metadata, specifically the event type.
 
-``` toml
-[target.x86_64-unknown-linux-musl]
-linker = "x86_64-linux-musl-gcc"
-```
+This proxy server adds all headers including the event type into the JSON body and forwards to Splunk HEC.
 
-Install Dependencies
-``` sh
-rustup target add x86_64-unknown-linux-musl
-brew install FiloSottile/musl-cross/musl-cross
-```
-
-Build
-``` sh
-cargo build --release --target x86_64-unknown-linux-musl
-```
+It runs as an Azure Function app which is built using Terraform when a PR is merged into main.
 
 
