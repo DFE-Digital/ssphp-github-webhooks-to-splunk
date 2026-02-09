@@ -40,19 +40,13 @@ struct Config {
     splunk_svc: Service,
     github_hmac_secret: Bytes,
     github_clients: GitHubClients,
+    hostname: String,
 }
 
 struct GitHubClients(HashMap<String, OctocrabGit>);
 
-// struct GitHubApps {
-//     apps: HashMap<String, GitHubApp>,
-// }
-
-// impl GitHubApps {
-//     async fn new(
-// }
 async fn get_github_installations(github_app: GitHubApp) -> Result<GitHubClients> {
-    let client = OctocrabGit::new_from_app(&github_app).unwrap();
+    let client = OctocrabGit::new_from_app(&github_app)?;
 
     info!("Getting installations");
     let installations = client
@@ -93,17 +87,22 @@ async fn main() {
 
     let github_app = GitHubApp::new(app_secrets.github_app_id, app_secrets.github_app_secret)
         .expect("GitHub app should build");
-    let github_clients = get_github_installations(github_app).await.unwrap();
+    let github_clients = get_github_installations(github_app)
+        .await
+        .expect("Need to get github installations");
 
     let config = Arc::new(Config {
         splunk_svc: Service::new(url, app_secrets.token),
         github_hmac_secret: Bytes::from_owner(app_secrets.github_hmac_secret),
         github_clients,
+        hostname: gethostname()
+            .into_string()
+            .expect("must be able to get hostname"),
     });
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("Must be able to get system time")
         .as_secs() as usize;
 
     let event_metadata = hec_event::EventMetaData::new(
@@ -111,10 +110,12 @@ async fn main() {
         "ssphp_test".to_string(),
         "ssphp_github_webhooks_json".to_string(),
         "azure_webhooks_function".to_string(),
-        gethostname().into_string().unwrap(),
+        config.hostname.to_string(),
     );
+
     let hec_event = HecEvent::new("Starting Sending GitHub Logs to Splunk", event_metadata);
-    let serialized_event = serde_json::to_string(&hec_event).unwrap();
+    let serialized_event =
+        serde_json::to_string(&hec_event).expect("Must be able to serialize startup event");
     config.splunk_svc.send_event(serialized_event).await;
 
     // build our application with a single route
@@ -131,9 +132,11 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
         .await
-        .unwrap();
+        .expect("Can't bind to port");
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .await
+        .expect("Can't start axum server");
 }
 
 /// Health check
@@ -181,13 +184,13 @@ async fn github_secret_alert(
     payload_in: &Bytes,
     payload_out: &mut Value,
     github_clients: &GitHubClients,
-) {
-    let secret_alert: SecretAlert = serde_json::from_slice(payload_in).unwrap();
+) -> Result<()> {
+    let secret_alert: SecretAlert = serde_json::from_slice(payload_in)?;
 
     let github_client = github_clients
         .0
         .get(secret_alert.organization.login)
-        .unwrap();
+        .context("don't have Octobrab client for this GitHub Org")?;
 
     let stream = github_client
         .client
@@ -198,13 +201,13 @@ async fn github_secret_alert(
         .secrets_scanning()
         .get_alert_locations(secret_alert.alert.number)
         .await
-        .unwrap()
+        .context("Getting secret alert location")?
         .into_stream(&github_client.client);
 
     pin!(stream);
 
     let mut locations = Vec::new();
-    while let Some(secret_location) = stream.try_next().await.unwrap() {
+    while let Ok(Some(secret_location)) = stream.try_next().await {
         //dbg!(&secret_location.commit_sha);
         let sha = match &secret_location {
             octocrab::models::repos::secret_scanning_alert::SecretsScanningAlertLocation::Commit{commit_sha, ..} => Some(commit_sha),
@@ -223,10 +226,10 @@ async fn github_secret_alert(
                 .per_page(1)
                 .send()
                 .await
-                .unwrap()
+                .context("Getting SHA for secret commit")?
                 .items
                 .first()
-                .unwrap()
+                .context("No commit found for commit SHA")?
                 .clone();
             let mut map = Map::new();
             let mut author_set = HashSet::new();
@@ -273,6 +276,7 @@ async fn github_secret_alert(
     payload_out
         .as_object_mut()
         .and_then(|obj| obj.insert("SSPHP".to_string(), Value::Object(ssphp)));
+    Ok(())
 }
 
 // async fn github_secret_alert_location(
@@ -312,10 +316,10 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
     match validate_webhook_payload(&config.github_hmac_secret, &headers, &body) {
         Ok(_) => (),
         Err(err) => {
-            dbg!("!!!INVALID!!!");
-            dbg!(err);
+            dbg!(&err);
             dbg!(&headers);
-            let bad_json_string = String::from_utf8(body.to_vec()).unwrap();
+            let bad_json_string = String::from_utf8(body.to_vec())
+                .unwrap_or_else(|_| "Unable to decode request body as UTF-8".to_string());
             dbg!(bad_json_string);
             return StatusCode::BAD_REQUEST.into_response();
         }
@@ -346,7 +350,8 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
         Ok(payload) => payload,
         Err(err) => {
             dbg!(err);
-            let bad_json_string = String::from_utf8(body.to_vec()).unwrap();
+            let bad_json_string = String::from_utf8(body.to_vec())
+                .unwrap_or_else(|_| "Unable to decode request body as UTF-8".to_string());
             dbg!(bad_json_string);
             return StatusCode::BAD_REQUEST.into_response();
         }
@@ -357,7 +362,8 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
         .map(|header_value| header_value.to_str())
     {
         Some(Ok("secret_scanning_alert")) => {
-            github_secret_alert(&body, &mut payload, &config.github_clients).await
+            let _unused_result =
+                github_secret_alert(&body, &mut payload, &config.github_clients).await;
         }
         _ => {}
     }
@@ -370,7 +376,7 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
         .as_secs() as usize;
 
     let source_org = payload
@@ -401,7 +407,7 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
             "{}:{}:{}:{}",
             source_org, source_repo, source_event, source_action
         ),
-        gethostname().into_string().unwrap(),
+        config.hostname.to_string(),
     );
     let hec_event = HecEvent::new(payload, event_metadata);
     let serialized_event = serde_json::to_string(&hec_event).unwrap();
@@ -420,10 +426,10 @@ fn validate_webhook_payload(
     };
     let github_hash = github_hash
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .split('=')
         .next_back()
-        .unwrap()
+        .unwrap_or("")
         .as_bytes();
 
     let mut hash_bytes = vec![0; github_hash.len() / 2];
@@ -452,7 +458,7 @@ async fn get_secrets() -> Result<AppSecrets, Box<dyn std::error::Error>> {
     )?);
 
     info!("KeyVault Secret Client created");
-    let keyvault_name = std::env::var("KEY_VAULT_NAME").unwrap();
+    let keyvault_name = std::env::var("KEY_VAULT_NAME").expect("KEY_VAULT_NAME MUST be set");
     let keyvault_url = format!("https://{keyvault_name}.vault.azure.net");
     let client = KeyvaultClient::new(&keyvault_url, credential.clone())?.secret_client();
 
