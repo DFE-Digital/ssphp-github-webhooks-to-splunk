@@ -19,6 +19,15 @@ azure_identity = { version = "0.21", default-features = false, features = ["enab
 azure_security_keyvault = { version = "0.21", default-features = false,  features = ["enable_reqwest_rustls"]}
 tracing = "0"
 gethostname = "1.1.0"
+data_ingester_github = { git = "https://github.com/DFE-Digital/service-security-posture-hardening.git", subdir = "data_ingester/data_ingester_workspace" }
+data_ingester_splunk = { git = "https://github.com/DFE-Digital/service-security-posture-hardening.git", subdir = "data_ingester/data_ingester_workspace" }
+data_ingester_supporting = { git = "https://github.com/DFE-Digital/service-security-posture-hardening.git", subdir = "data_ingester/data_ingester_workspace" }
+tracing-subscriber = {version = "0", features = ["env-filter", "registry", "json", "valuable"]}
+base64 = "0.13.1"
+anyhow = "*"
+octocrab = { version="*", features = ["stream"]}
+futures = "*"
+futures-util = "*"
 
 [profile.release]
 debug = true
