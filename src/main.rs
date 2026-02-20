@@ -441,6 +441,7 @@ fn validate_webhook_payload(
     mac.update(body);
 
     mac.verify_slice(&hash_bytes[..])?;
+
     Ok(())
 }
 
@@ -484,7 +485,7 @@ async fn get_secrets() -> Result<AppSecrets, Box<dyn std::error::Error>> {
 
 #[derive(Debug, Clone)]
 enum ValidationError {
-    MacError(MacError),
+    MacError(hmac::digest::MacError),
     MissingHeader,
     #[allow(dead_code)]
     FasterHex(faster_hex::Error),
@@ -496,8 +497,8 @@ impl From<faster_hex::Error> for ValidationError {
     }
 }
 
-impl From<digest::MacError> for ValidationError {
-    fn from(value: digest::MacError) -> Self {
+impl From<hmac::digest::MacError> for ValidationError {
+    fn from(value: hmac::digest::MacError) -> Self {
         ValidationError::MacError(value)
     }
 }

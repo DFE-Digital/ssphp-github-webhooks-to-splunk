@@ -25,7 +25,7 @@ data_ingester_supporting = { git = "https://github.com/DFE-Digital/service-secur
 tracing-subscriber = {version = "0", features = ["env-filter", "registry", "json", "valuable"]}
 base64 = "0.13.1"
 anyhow = "*"
-octocrab = { version="*", features = ["stream"]}
+octocrab = { version="0", default-features=false, features =["rustls-aws-lc-rs", "jwt-aws-lc-rs", "follow-redirect", "retry", "rustls", "timeout", "tracing", "default-client", "stream"]}
 futures = "*"
 futures-util = "*"
 
