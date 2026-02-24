@@ -107,7 +107,7 @@ async fn main() {
 
     let event_metadata = hec_event::EventMetaData::new(
         now,
-        "ssphp_test".to_string(),
+        "github".to_string(),
         "ssphp_github_webhooks_json".to_string(),
         "azure_webhooks_function".to_string(),
         config.hostname.to_string(),
@@ -401,7 +401,7 @@ async fn root(State(config): State<Arc<Config>>, headers: HeaderMap, body: Bytes
 
     let event_metadata = hec_event::EventMetaData::new(
         now,
-        "ssphp_test".to_string(),
+        "github".to_string(),
         "ssphp_github_webhooks_json".to_string(),
         format!(
             "{}:{}:{}:{}",
